@@ -94,6 +94,32 @@ app.get('/prepare/name/:world/:characterName', limiter, (req, res, next) => {
     .catch(next);
 });
 
+app.get('/prepare/bulk/id', rateLimit({
+  windowMs: 10000, // ms = 10s
+  max: 1, // default XIV API request limit
+  keyGenerator: () => 'bulk',
+}), async (req, res, next) => {
+  try {
+    const language = typeof req.query.lang === 'string' && supportedLanguages.includes(req.query.lang) ? req.query.lang : supportedLanguages[0];
+    const idsFromQuery = (Array.isArray(req.query.id) ? req.query.id : [req.query.id])
+      .map(idEntry => idEntry.split(','))
+      .flat()
+      .filter(id => typeof id === 'string' && id.trim() !== '')
+      .map(id => id.trim());
+    
+    const distinctIds = Array.from(new Set(idsFromQuery));
+    const chunkedIds = []
+    while (distinctIds.length > 0) chunkedIds.push(distinctIds.splice(0, 15)); 
+  
+    res.sendStatus(204);
+    for (const chunk of chunkedIds) {
+      await Promise.all(chunk.map(id => cacheCreateCard(id, null, language)));
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/characters/id/:characterId.png', limiter, (req, res, next) => {
   const language = typeof req.query.lang === 'string' && supportedLanguages.includes(req.query.lang) ? req.query.lang : supportedLanguages[0];
 
